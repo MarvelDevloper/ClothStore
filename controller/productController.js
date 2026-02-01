@@ -28,10 +28,14 @@ const productController = {
     }),
     updateProduct: asyncHandler(async (req, res) => {
         const productId = req.params.productId
-
-        const existProduct = await Product.findByIdAndUpdate(productId, req.body, { new: true })
+        const existProduct = await Product.findById(productId)
+        const updateProduct = await Product.findByIdAndUpdate(productId, req.body, { new: true })
 
         if (!existProduct) {
+            throw new ApiError('product not found!', 400)
+        }
+
+        if (!updateProduct) {
             throw new ApiError('failed to update the product', 400)
         }
 
@@ -76,6 +80,7 @@ const productController = {
                 return url
             }))
             return {
+                id: product.id,
                 title: product.title,
                 price: product.price,
                 brand: product.brand,
@@ -89,21 +94,25 @@ const productController = {
 
         return res.status(200).json({ success: true, productwithImage })
     }),
-    deleteProduct:asyncHandler(async(res,res)=>{
-        const productId=req.params.productId
+    deleteProduct: asyncHandler(async (req, res) => {
+        const productId = req.params.productId
 
-        if(!productId){
-            throw new ApiError('product not found!',400)
+        const existProduct = await Product.findById(productId)
+
+        if (!existProduct) {
+            throw new ApiError('product not found!', 400)
         }
 
-        const deleteProduct=await Product.findByIdAndDelete(productId)
-
-        if(!deleteProduct){
-            throw new ApiError('failed to delete the product',400)
+        if (!productId) {
+            throw new ApiError('productID not found!', 400)
         }
 
+        const deleteProduct = await Product.findByIdAndDelete(productId)
 
-        return res.status(200).json({success:true,msg:'product deleted successfully'})
+        if (!deleteProduct) {
+            throw new ApiError('failed to delete the product', 400)
+        }
+        return res.status(200).json({ success: true, msg: 'product deleted successfully' })
     })
 }
 
