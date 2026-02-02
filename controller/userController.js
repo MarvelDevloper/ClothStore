@@ -3,10 +3,12 @@ const { asyncHandler, ApiError } = require('../middleware/errorHandler')
 const User = require('../model/userModel')
 const bcryptjs = require('bcryptjs')
 const redis = require('../redisConfig/redis')
+const Cart = require('../model/cartModel')
+const Product = require('../model/productModel')
 
 const userController = {
     signup: asyncHandler(async (req, res) => {
-        const { email, password, name, address, role,phone} = req.body
+        const { email, password, name, address, role, phone } = req.body
 
         if (!name || !email || !password || !address) {
             throw new ApiError('all fields required', 400)
@@ -21,7 +23,7 @@ const userController = {
         const hashPassword = await bcryptjs.hash(password, 10)
 
         const user = new User({
-            name, email, password: hashPassword, address, role: role || 'user',phone
+            name, email, password: hashPassword, address, role: role || 'user', phone
         })
 
         await user.save()
@@ -51,7 +53,7 @@ const userController = {
         const refresh = generateRefreshToken()
 
         console.log(hashFn("Hello world"))
-        
+
         await redis.set(`refresh:${hashFn(refresh)}`, existUser.id, "EX", 7 * 24 * 60 * 60)
 
         res.cookie('accesstoken', access, {
@@ -106,7 +108,118 @@ const userController = {
         })
 
         return res.status(200).json({ success: true, token: newAccesstoken })
-    })
+    }),
+    change_password: asyncHandler(async (req, res) => {
+        const userId = req.userId
+        const { oldpassword, newPassword } = req.body
+
+        if (!oldpassword || !newPassword) {
+            throw new ApiError('all fields required', 400)
+        }
+        const existUser = await User.findById(userId)
+
+        if (!existUser) {
+            throw new ApiError('user not found', 400)
+        }
+
+        const isValid = await bcryptjs.compare(oldpassword, existUser.password)
+
+        if (!isValid) {
+            throw new ApiError('invalid password', 401)
+        }
+        const newHashPassword = await bcryptjs.hash(newPassword, 10)
+
+        existUser.password = newHashPassword
+
+        await existUser.save()
+
+        return res.status(200).json({ success: true, msg: 'password successfully updated' })
+    }),
+    get_profile: asyncHandler(async (req, res) => {
+        const userId = req.userId
+
+        if (!userId) {
+            throw new ApiError("userId found!", 400)
+        }
+
+        const existUser = await User.findById(userId).select('name email address phone role')
+
+        if (!existUser) {
+            throw new ApiError("user not found!", 400)
+        }
+
+        return res.status(200).json({ success: true, profile: existUser })
+    }),
+    update_Profile: asyncHandler(async (req, res) => {
+        const userId = req.userId
+
+        if (!userId) {
+            throw new ApiError('user not found!', 400)
+        }
+
+        const updateUserProfile = await User.findByIdAndUpdate(userId, req.body, { new: true })
+
+        if (!updateUserProfile) {
+            throw new ApiError('failed to update profile!', 400)
+        }
+
+        return res.status(200).json({ sucess: true, msg: 'profile updated successfully', updateUserProfile })
+    }),
+    addCart: asyncHandler(async (req, res) => {
+        const { cart } = req.body
+        const userId = req.userId
+
+        if (!cart || cart.length === 0) {
+            throw new ApiError('all fields required', 400)
+        }
+
+        const productIds = cart.map((product) => {
+            return product.productId
+        })
+
+        // console.log(cart)
+        const data = await Promise.all(productIds.map(async (productId, index) => {
+            const Price = await Product.findById(productId).select('price')
+            cart[index].price = Price.price
+            return cart.price
+        }))
+
+        const existCart = await Cart.findOne({ userId: userId })
+
+        if (existCart) {
+            cart.forEach((product) => {
+                const index = existCart.cart.findIndex((existProduct) => {
+                    return (existProduct.productId.toString() === product.productId.toString())
+                })
+
+                if (index > -1) {
+                    existCart.cart[index].quantity += product.quantity
+                    existCart.cart[index].price = product.price
+                } else {
+                    existCart.cart.push(product)
+                }
+            })
+            existCart.totalPrice = existCart.cart.reduce((acc, product) => {
+                return acc = acc + (product.price * product.quantity)
+            }, 0)
+
+            await existCart.save()
+
+            return res.status(200).json({ success: true, msg: "cart updated successfully!" })
+        }
+        const totalprice = cart.reduce((acc, product) => {
+            return acc = acc + (product.price * product.quantity)
+        }, 0)
+        const cartItems = new Cart({
+            userId,
+            cart,
+            totalPrice: totalprice
+        })
+
+        await cartItems.save()
+
+        return res.status(201).json({ success: true, msg: 'product added to cart!' })
+    }),
 }
 
 module.exports = userController

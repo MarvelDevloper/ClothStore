@@ -47,22 +47,6 @@ const userSchema = mongoose.Schema({
         enum: ['admin', 'user'],
         default: 'user'
     },
-    cart: [
-        {
-            productId: {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: 'Product'
-            },
-            quantity: {
-                type: Number,
-                default: 1
-            },
-            price: {
-                type: Number,
-                required: true,
-            }
-        }
-    ],
     totalPrice: {
         type: Number,
         default: 0

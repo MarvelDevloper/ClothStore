@@ -63,7 +63,19 @@ const productController = {
         return res.status(200).json({ success: true, urls })
     }),
     getObject: asyncHandler(async (req, res) => {
-        const products = await Product.find({})
+        const page = req.query.page || 1
+        const limit = req.query.limit || 5
+        const skip = (page - 1) * limit
+
+        const sortOption = {}
+
+        if (req.query.sort) {
+            const sortOrder = (req.query.sort.startsWith('-') ? -1 : 1)
+            const sortField = (req.query.sort.startsWith('-') ? req.query.sort.substring(1) : req.query.sort)
+
+            sortOption[sortField] = sortOrder
+        }
+        const products = await Product.find({}).sort(sortOption).skip(skip).limit(limit)
 
         if (!products || products.length === 0) {
             throw new ApiError('No products found', 404)
